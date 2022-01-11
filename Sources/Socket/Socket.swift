@@ -2783,6 +2783,46 @@ public class Socket: SocketReader, SocketWriter {
 		return returnCount
 	}
 
+	public func readSlowly(into data: inout Data) throws -> Int {
+	    let maxcount:Int = 10 //max amount of times it'll try receiving an answer
+	    let maxnilcount:Int = 3 //amount of times it can receive "nil" in a row before it stops
+	    var nilcount:Int = 0
+
+	    // The socket must've been created and must be connected...
+	    if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+	    }
+
+	    if !self.isConnected {
+		throw Error(code: Socket.SOCKET_ERR_NOT_CONNECTED, reason: "Socket is not connected")
+	    }
+
+	    var returnCount: Int = 0
+
+	    for _ in 0..<maxcount {
+		if nilcount >= maxnilcount {
+		    break
+		} else {        
+		    // Read all available bytes...
+		    let count = try self.readDataIntoStorage()
+
+		    // Did we get data?
+		    if count > 0 {
+			// - Yes, move to caller's buffer...
+			data.append(self.readStorage.bytes.assumingMemoryBound(to: UInt8.self), count: self.readStorage.length)
+			returnCount = returnCount + self.readStorage.length
+			// - Reset the storage buffer...
+			self.readStorage.length = 0
+		    } else {
+			nilcount += 1
+		    }
+		}
+
+		usleep(500) //500ms
+	    }
+	    return returnCount
+	}
+	
 	// MARK: --- UDP
 
 	///
